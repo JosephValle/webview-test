@@ -10,7 +10,9 @@ class RefreshWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       onPressed: () {
-        webViewController?.reload();
+        if (webViewController != null) {
+          webViewController!.reload();
+        }
       },
       icon: const Icon(Icons.refresh),
     );
