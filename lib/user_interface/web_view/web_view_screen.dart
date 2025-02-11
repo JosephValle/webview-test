@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:webview_test/utiltiies/string_constant.dart';
+import 'package:webview_test/utiltiies/constant/string_constant.dart';
 
 import '../docs/docs_screen.dart';
 
@@ -23,24 +23,50 @@ class _WebViewScreenState extends State<WebViewScreen> {
   @override
   void initState() {
     super.initState();
-    // Request the necessary permissions
     Permission.camera.request();
     Permission.microphone.request();
     Permission.location.request();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Parse the received JSON
+  void createWebView(InAppWebViewController controller) {
+    _webViewController = controller;
+    // Handler that will be called from JS: window.flutter_inappwebview.callHandler('returnData', data)
+    _webViewController?.addJavaScriptHandler(
+      handlerName: 'returnData',
+      callback: (data) {
+        // data will be the string passed to postMessage
+        setState(() {
+          receivedData = data.first.toString();
+        });
+      },
+    );
 
-    final Map<String, dynamic>? dataAsJson =
-        receivedData != null ? jsonDecode(receivedData!) : null;
+    // Another handler if we ever need it
+    // _webViewController?.addJavaScriptHandler(
+    //   handlerName: 'flutterChannel',
+    //   callback: (data) {
+    //     setState(() {
+    //       receivedData = data.toString();
+    //     });
+    //   },
+    // );
+  }
+
+  String getDisplayString(Map<String, dynamic>? dataAsJson) {
     String displayString = 'The data fields received are:';
     if (dataAsJson != null) {
       dataAsJson.forEach((key, value) {
         displayString += '\n$key: ${value.toString().length}';
       });
     }
+    return displayString;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Map<String, dynamic>? dataAsJson =
+        receivedData != null ? jsonDecode(receivedData!) : null;
+    final String displayString = getDisplayString(dataAsJson);
 
     return Scaffold(
       appBar: AppBar(
@@ -74,31 +100,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   mediaPlaybackRequiresUserGesture: false,
                   allowsInlineMediaPlayback: true,
                 ),
-                onWebViewCreated: (controller) {
-                  _webViewController = controller;
-                  // Handler that will be called from JS: window.flutter_inappwebview.callHandler('returnData', data)
-                  _webViewController?.addJavaScriptHandler(
-                    handlerName: 'returnData',
-                    callback: (data) {
-                      // data will be the string passed to postMessage
-                      print('Data from returnData: ${data.length}');
-                      setState(() {
-                        receivedData = data.first.toString();
-                      });
-                    },
-                  );
-
-                  // Another handler if you ever need it
-                  _webViewController?.addJavaScriptHandler(
-                    handlerName: 'flutterChannel',
-                    callback: (data) {
-                      print('Data from flutterChannel: $data');
-                      setState(() {
-                        receivedData = data.toString();
-                      });
-                    },
-                  );
-                },
+                onWebViewCreated: (controller) => createWebView(controller),
                 onLoadStop: (controller, url) async {
                   // 1) Inject a JS snippet that overrides window.returnData with our own
                   //    object that calls flutter_inappwebview.callHandler(...)
@@ -143,15 +145,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         displayString,
                         style: const TextStyle(fontSize: 18),
                       ),
-                      // vertical 16/9
-                      AspectRatio(
-                        aspectRatio: 9 / 16,
-                        // the json[image] is a base64 string
-                        child: Image.memory(
-                          base64Decode(dataAsJson!['image'].split(',')[1]),
-                          fit: BoxFit.cover,
+                      if (dataAsJson!['image'] != null)
+                        AspectRatio(
+                          aspectRatio: 9 / 16,
+                          // the json[image] is a base64 string
+                          child: Image.memory(
+                            base64Decode(dataAsJson['image'].split(',')[1]),
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                      ),
                       const SizedBox(height: 16),
                     ],
                   ),

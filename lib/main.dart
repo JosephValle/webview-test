@@ -5,13 +5,9 @@ import 'package:webview_test/user_interface/web_view/web_view_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final camera = await Permission.camera.request();
-  print(camera.isGranted);
-  final mic = await Permission.microphone.request();
-
-  print(mic.isGranted);
-  final loc = await Permission.location.request();
-  print(loc.isGranted);
+  await Permission.camera.request();
+  await Permission.microphone.request();
+  await Permission.location.request();
 
   runApp(const MyApp());
 }
