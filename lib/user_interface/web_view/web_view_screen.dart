@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:webview_test/user_interface/web_view/widgets/docs_widget.dart';
+import 'package:webview_test/user_interface/web_view/widgets/refresh_widget.dart';
 import 'package:webview_test/utiltiies/constant/string_constant.dart';
-
-import '../docs/docs_screen.dart';
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -40,16 +40,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
         });
       },
     );
-
-    // Another handler if we ever need it
-    // _webViewController?.addJavaScriptHandler(
-    //   handlerName: 'flutterChannel',
-    //   callback: (data) {
-    //     setState(() {
-    //       receivedData = data.toString();
-    //     });
-    //   },
-    // );
   }
 
   String getDisplayString(Map<String, dynamic>? dataAsJson) {
@@ -77,13 +67,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
               : 'WebView Example',
         ),
         actions: [
-          if (_webViewController != null) _buildRefreshWidget(),
-          if (_webViewController == null) _buildDocsWidget(),
+          if (_webViewController != null) RefreshWidget(_webViewController),
+          if (_webViewController == null) const DocsWidget(),
         ],
       ),
       body: SafeArea(
         child: receivedData == null
             ? InAppWebView(
+                // I think this one is use url and have blob as backup
                 initialData: InAppWebViewInitialData(
                   data: StringConstant.html,
                   baseUrl: WebUri(
@@ -91,6 +82,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         (setToInt ? '?length_of_test=$setTo' : ''),
                   ),
                 ),
+                // this is just url
                 // initialUrlRequest: URLRequest(
                 //   url: WebUri(
                 //     "${StringConstant.mainUrl}${setToInt ? "?length_of_test=$setTo" : ""}",
@@ -102,8 +94,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 ),
                 onWebViewCreated: (controller) => createWebView(controller),
                 onLoadStop: (controller, url) async {
-                  // 1) Inject a JS snippet that overrides window.returnData with our own
-                  //    object that calls flutter_inappwebview.callHandler(...)
                   await controller.evaluateJavascript(
                     source: '''
                     // Only if window.returnData doesn’t already have our override:
@@ -160,27 +150,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 ),
               ),
       ),
-    );
-  }
-
-  Widget _buildDocsWidget() {
-    return IconButton(
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const DocsScreen()),
-        );
-      },
-      icon: const Icon(Icons.find_in_page_rounded),
-    );
-  }
-
-  Widget _buildRefreshWidget() {
-    return IconButton(
-      onPressed: () {
-        _webViewController?.reload();
-      },
-      icon: const Icon(Icons.refresh),
     );
   }
 
