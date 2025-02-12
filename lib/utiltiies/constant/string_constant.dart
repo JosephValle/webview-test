@@ -147,7 +147,7 @@ With this setup, MyCap can receive structured data from any website hosted on th
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tapping Test</title>
+  <title>Custom Active Task Demo</title>
   <!-- Using Bootstrap 4 for basic styling -->
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
   <style>
@@ -189,32 +189,28 @@ With this setup, MyCap can receive structured data from any website hosted on th
     const urlParams = new URLSearchParams(window.location.search);
     const config = {
       identifier: urlParams.get('identifier') || 'defaultIdentifier',
-      // Test duration in seconds (default 30)
-      lengthOfTest: parseInt(urlParams.get('length_of_test')) || 30,
-      // handOptions: '.Both', '.Right', or '.Left' (default is '.Both')
-      handOptions: urlParams.get('handOptions') || '.Both',
+      // Test duration in seconds (default 5)
+      lengthOfTest: parseInt(urlParams.get('length_of_test')) || 5,
       // Optional description string; fallback text if not provided
-      intendedUseDescription: urlParams.get('intendedUseDescription') || 'Welcome to the Tapping Test. Please follow the instructions below.'
+      intendedUseDescription: urlParams.get('intendedUseDescription') || 'Welcome to the Custom Active Task Demo. Please follow the instructions below.'
     };
 
     // Global result object – the final JSON to be sent.
-    // It now includes fields for image, audio, and location.
     let result = {
       rightHand: {},
-      leftHand: {},
-      image: null,       // to hold image bytes (as base64 string)
-      audio: null,       // to hold audio recording bytes (as base64 string)
-      location: { latitude: null, longitude: null }  // nullable lat/long
+      image: null,       // base64 image string
+      audio: null,       // base64 audio string
+      location: { latitude: null, longitude: null }
     };
 
-    // Test state variables (used on each test page)
+    // Test state variables
     let testRunning = false;
     let testStartTime = 0;
     let tapCount = 0;
     let samples = [];       // Array to store tap samples
-    let accEvents = [];     // Array to store accelerometer (device motion) events
+    let accEvents = [];     // Array to store accelerometer events
     let testInterval = null;
-    let currentTestHand = ""; // "RIGHT" or "LEFT"
+    let currentTestHand = "RIGHT";
 
     // Variables for extra media capture
     let videoStream = null;
@@ -222,58 +218,40 @@ With this setup, MyCap can receive structured data from any website hosted on th
     let audioChunks = [];
 
     /**************** Page Setup ****************/
-    // Build the pages array based on the handOptions.
-    // For ".Both": common intro, right hand intro, right test, left hand intro, left test,
-    // then extra steps: image capture, audio recording, location capture, then completion.
-    // For ".Right" or ".Left": common intro, hand-specific intro, test, then extra steps, then completion.
     function initPages() {
       pages = [];
-      // Page 0: Common intro (displaying received URL parameters)
+      // Page 0: Common intro
       pages.push({
         type: 'intro',
-        title: 'Tapping Test',
+        title: 'Custom Active Task Demo',
         instructions: [
           config.intendedUseDescription,
-          'This test will measure your tapping speed.'
+          'This test will measure your tapping speed using your RIGHT hand.'
         ]
       });
-      if (config.handOptions === '.Both' || config.handOptions === '.Right') {
-        // For right hand test
-        pages.push({
-          type: 'intro',
-          hand: 'RIGHT',
-          title: 'Right Hand Test',
-          instructions: [`Tap the buttons using your RIGHT hand for ${config.lengthOfTest} seconds.`]
-        });
-        pages.push({
-          type: 'test',
-          hand: 'RIGHT'
-        });
-      }
-      if (config.handOptions === '.Both' || config.handOptions === '.Left') {
-        // For left hand test
-        pages.push({
-          type: 'intro',
-          hand: 'LEFT',
-          title: 'Left Hand Test',
-          instructions: [`Tap the buttons using your LEFT hand for ${config.lengthOfTest} seconds.`]
-        });
-        pages.push({
-          type: 'test',
-          hand: 'LEFT'
-        });
-      }
-      // Extra Step: Capture an Image
+      // Right Hand Test Intro
+      pages.push({
+        type: 'intro',
+        hand: 'RIGHT',
+        title: 'Right Hand Test',
+        instructions: [`Tap the button using your RIGHT hand for ${config.lengthOfTest} seconds.`]
+      });
+      // Right Hand Tapping Test
+      pages.push({
+        type: 'test',
+        hand: 'RIGHT'
+      });
+      // Extra Step: Capture an Image (optional)
       pages.push({
         type: 'captureImage',
-        title: 'Capture Image',
-        instructions: ['Capture an image using your camera.']
+        title: 'Capture Image (Optional)',
+        instructions: ['Capture an image using your camera, or skip this step.']
       });
-      // Extra Step: Record Audio
+      // Extra Step: Record Audio (optional)
       pages.push({
         type: 'recordAudio',
-        title: 'Record Audio',
-        instructions: ['Record an audio clip using your microphone.']
+        title: 'Record Audio (Optional)',
+        instructions: ['Record an audio clip using your microphone, or skip this step.']
       });
       // Extra Step: Capture Location
       pages.push({
@@ -281,7 +259,7 @@ With this setup, MyCap can receive structured data from any website hosted on th
         title: 'Capture Location',
         instructions: ['Allow location access to capture your latitude and longitude (optional).']
       });
-      // Final page: Completion
+      // Final Page: Completion
       pages.push({
         type: 'completion',
         title: 'Completion',
@@ -296,10 +274,9 @@ With this setup, MyCap can receive structured data from any website hosted on th
       const page = pages[index];
       let html = '';
 
-      // Top Bar with page count and (if applicable) a Back button.
+      // Top Bar with page count and Back button (if applicable)
       html += `<div class="top-bar d-flex justify-content-between align-items-center">
                  <div>Page ${index + 1} of ${totalPages}</div>`;
-      // Only show Back button on non-test pages (and not on first page)
       if (index > 0 && page.type !== 'test' && page.type !== 'completion') {
         html += `<button id="backButton" class="btn btn-secondary">Back</button>`;
       }
@@ -312,7 +289,6 @@ With this setup, MyCap can receive structured data from any website hosted on th
         page.instructions.forEach(instr => {
           html += `<p>${instr}</p>`;
         });
-        // On the first page, display the received URL parameters.
         if (index === 0) {
           html += `<div class="card mb-3">
                      <div class="card-body">
@@ -321,11 +297,11 @@ With this setup, MyCap can receive structured data from any website hosted on th
                      </div>
                    </div>`;
         }
-        // Optional: A placeholder image (replace with your own if desired)
-        html += `<img src="left_hand_tap.png" alt="Instruction Image" class="img-fluid my-3"/>`;
+        <!-- Replace the image below with your own if desired -->
+        html += `<img src="right_hand_tap.png" alt="Instruction Image" class="img-fluid my-3"/>`;
       } else if (page.type === 'test') {
-        html += `<h2>Tapping Speed</h2>`;
-        html += `<p>Tap the buttons using your ${page.hand} hand.</p>`;
+        html += `<h2>Tapping Speed Test</h2>`;
+        html += `<p>Tap the button using your RIGHT hand.</p>`;
         html += `<div id="progressContainer" class="progress mb-3">
                    <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;"></div>
                  </div>`;
@@ -333,7 +309,6 @@ With this setup, MyCap can receive structured data from any website hosted on th
                    <p>Total Taps: <span id="tapCount">0</span></p>
                  </div>`;
         html += `<div class="d-flex justify-content-center">
-                   <button id="leftButton" class="tap-button mx-3">Tap</button>
                    <button id="rightButton" class="tap-button mx-3">Tap</button>
                  </div>`;
       } else if (page.type === 'captureImage') {
@@ -343,7 +318,10 @@ With this setup, MyCap can receive structured data from any website hosted on th
         });
         html += `<video id="video" autoplay playsinline style="width: 100%; max-width: 400px;"></video>`;
         html += `<canvas id="canvas" style="display:none;"></canvas>`;
-        html += `<div class="bottom-bar"><button id="captureButton" class="btn btn-primary">Capture Image</button></div>`;
+        html += `<div class="bottom-bar">
+                   <button id="captureButton" class="btn btn-primary">Capture Image</button>
+                   <button id="skipImage" class="btn btn-secondary ml-2">Skip</button>
+                 </div>`;
       } else if (page.type === 'recordAudio') {
         html += `<h2>${page.title}</h2>`;
         page.instructions.forEach(instr => {
@@ -352,6 +330,9 @@ With this setup, MyCap can receive structured data from any website hosted on th
         html += `<div id="audioControls" class="mb-3">
                    <button id="startRecording" class="btn btn-primary">Start Recording</button>
                    <button id="stopRecording" class="btn btn-secondary" disabled>Stop Recording</button>
+                 </div>`;
+        html += `<div class="bottom-bar">
+                   <button id="skipAudio" class="btn btn-secondary">Skip</button>
                  </div>`;
       } else if (page.type === 'captureLocation') {
         html += `<h2>${page.title}</h2>`;
@@ -369,14 +350,12 @@ With this setup, MyCap can receive structured data from any website hosted on th
       }
       html += `</div>`;
 
-      // Bottom Bar (only on non-test pages except some extra steps which have their own controls)
+      // Bottom Bar for non-test pages (if not already provided)
       if ((page.type === 'intro' || page.type === 'completion') && page.type !== 'test' && page.type !== 'captureImage' && page.type !== 'recordAudio' && page.type !== 'captureLocation') {
         html += `<div class="bottom-bar">`;
-        // Show Next button if not on the final (completion) page
         if (index < totalPages - 1 && page.type !== 'completion') {
           html += `<button id="nextButton" class="btn btn-primary">Next</button>`;
         }
-        // On the completion page, offer a Submit button.
         if (page.type === 'completion') {
           html += `<button id="submitButton" class="btn btn-success">Submit</button>`;
         }
@@ -385,7 +364,7 @@ With this setup, MyCap can receive structured data from any website hosted on th
 
       document.getElementById("app").innerHTML = html;
 
-      // Attach navigation button listeners
+      // Navigation button event listeners
       const backBtn = document.getElementById("backButton");
       if (backBtn) backBtn.addEventListener("click", prevPage);
       const nextBtn = document.getElementById("nextButton");
@@ -393,21 +372,16 @@ With this setup, MyCap can receive structured data from any website hosted on th
       const submitBtn = document.getElementById("submitButton");
       if (submitBtn) submitBtn.addEventListener("click", submitResults);
 
-      // If this is a test page, initialize test state and attach tap listeners.
+      // Test page: initialize test state and attach tap listener (right-hand only)
       if (page.type === 'test') {
-        // Reset test state
         testRunning = false;
         testStartTime = 0;
         tapCount = 0;
         samples = [];
         accEvents = [];
-        currentTestHand = page.hand;
+        currentTestHand = "RIGHT";
         document.getElementById("tapCount").textContent = "0";
 
-        // Set up tap button listeners
-        document.getElementById("leftButton").addEventListener("click", function(e) {
-          handleTap(e, "Left");
-        });
         document.getElementById("rightButton").addEventListener("click", function(e) {
           handleTap(e, "Right");
         });
@@ -415,7 +389,6 @@ With this setup, MyCap can receive structured data from any website hosted on th
 
       // Extra Step: Capture Image
       if (page.type === 'captureImage') {
-        // Request camera access and stream video to the video element.
         const video = document.getElementById("video");
         navigator.mediaDevices.getUserMedia({ video: true })
           .then(stream => {
@@ -426,23 +399,26 @@ With this setup, MyCap can receive structured data from any website hosted on th
             console.error("Error accessing camera: ", err);
             video.parentElement.innerHTML = "<p>Camera access denied or not available.</p>";
           });
-
-        // Attach listener for capture button
         document.getElementById("captureButton").addEventListener("click", captureImage);
+        document.getElementById("skipImage").addEventListener("click", function() {
+          if (videoStream) {
+            videoStream.getTracks().forEach(track => track.stop());
+          }
+          nextPage();
+        });
       }
 
       // Extra Step: Record Audio
       if (page.type === 'recordAudio') {
         const startBtn = document.getElementById("startRecording");
         const stopBtn = document.getElementById("stopRecording");
-
         startBtn.addEventListener("click", startAudioRecording);
         stopBtn.addEventListener("click", stopAudioRecording);
+        document.getElementById("skipAudio").addEventListener("click", nextPage);
       }
 
       // Extra Step: Capture Location
       if (page.type === 'captureLocation') {
-        // Attempt to get location
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (position) => {
@@ -463,7 +439,6 @@ With this setup, MyCap can receive structured data from any website hosted on th
           result.location.longitude = null;
           document.getElementById("locationStatus").textContent = "Geolocation not supported.";
         }
-        // Attach listener to next button on location page.
         document.getElementById("locationNextButton").addEventListener("click", nextPage);
       }
     }
@@ -473,7 +448,6 @@ With this setup, MyCap can receive structured data from any website hosted on th
         currentPageIndex++;
         renderPage(currentPageIndex);
       } else {
-        // If on the last page, submit the results.
         submitResults();
       }
     }
@@ -486,13 +460,10 @@ With this setup, MyCap can receive structured data from any website hosted on th
     }
 
     /**************** Test (Tapping) Logic ****************/
-    // Handle a tap event on one of the test buttons.
     function handleTap(e, buttonSide) {
-      // Get tap coordinates (clientX, clientY)
       const x = e.clientX;
       const y = e.clientY;
-      const btnId = (buttonSide === "Left") ? ".Left" : ".Right";
-      // If the test has not yet started, start it.
+      // Since only RIGHT-hand is used, start the test if not already running.
       if (!testRunning) {
         startTest();
       }
@@ -502,13 +473,11 @@ With this setup, MyCap can receive structured data from any website hosted on th
       samples.push({
         locationX: x,
         locationY: y,
-        buttonIdentifier: btnId,
+        buttonIdentifier: ".Right",
         timestamp: timestamp
       });
     }
 
-    // Start the test: record the start time, begin updating the progress bar,
-    // and add a device motion listener (if available).
     function startTest() {
       testRunning = true;
       testStartTime = Date.now();
@@ -520,30 +489,18 @@ With this setup, MyCap can receive structured data from any website hosted on th
           stopTest();
         }
       }, 50);
-      // Listen for device motion events (if supported).
       window.addEventListener("devicemotion", deviceMotionHandler);
     }
 
-    // Stop the test: stop the timer, remove the motion listener, gather button data,
-    // record the test results, and then automatically navigate to the next page.
     function stopTest() {
       clearInterval(testInterval);
       testRunning = false;
       window.removeEventListener("devicemotion", deviceMotionHandler);
 
-      // Gather button data (using getBoundingClientRect)
-      const leftBtn = document.getElementById("leftButton");
       const rightBtn = document.getElementById("rightButton");
-      const leftRect = leftBtn.getBoundingClientRect();
       const rightRect = rightBtn.getBoundingClientRect();
       const btnInfo = {
-        buttonRect1: {
-          locationX: leftRect.left,
-          locationY: leftRect.top,
-          width: leftRect.width,
-          height: leftRect.height
-        },
-        buttonRect2: {
+        buttonRect: {
           locationX: rightRect.left,
           locationY: rightRect.top,
           width: rightRect.width,
@@ -556,19 +513,11 @@ With this setup, MyCap can receive structured data from any website hosted on th
         samples: samples
       };
 
-      // Save the results for the current test hand.
-      if (currentTestHand === "RIGHT") {
-        result.rightHandAccData = accEvents;
-        result.rightHand = btnInfo;
-      } else if (currentTestHand === "LEFT") {
-        result.leftHandAccData = accEvents;
-        result.leftHand = btnInfo;
-      }
-      // Automatically go to the next page after a short delay.
+      result.rightHandAccData = accEvents;
+      result.rightHand = btnInfo;
       setTimeout(nextPage, 500);
     }
 
-    // Device motion event handler: record acceleration values along with a timestamp.
     function deviceMotionHandler(event) {
       const acceleration = event.acceleration;
       const timestamp = Date.now() - testStartTime;
@@ -586,21 +535,17 @@ With this setup, MyCap can receive structured data from any website hosted on th
     function captureImage() {
       const video = document.getElementById("video");
       const canvas = document.getElementById("canvas");
-      // Set canvas dimensions equal to video dimensions
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const context = canvas.getContext('2d');
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      // Convert the canvas image to a data URL (base64)
       canvas.toBlob(function(blob) {
         const reader = new FileReader();
         reader.onloadend = function() {
-          result.image = reader.result; // This is a base64 string representing the image bytes.
-          // Stop the video stream
+          result.image = reader.result;
           if (videoStream) {
             videoStream.getTracks().forEach(track => track.stop());
           }
-          // Proceed to next page
           nextPage();
         }
         reader.readAsDataURL(blob);
@@ -624,14 +569,11 @@ With this setup, MyCap can receive structured data from any website hosted on th
             }
           };
           mediaRecorder.onstop = function() {
-            // Convert recorded audio chunks to a blob, then to base64.
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
             const reader = new FileReader();
             reader.onloadend = function() {
-              result.audio = reader.result; // base64 string of audio bytes.
-              // Stop all audio tracks.
+              result.audio = reader.result;
               stream.getTracks().forEach(track => track.stop());
-              // Proceed to next page.
               nextPage();
             }
             reader.readAsDataURL(audioBlob);
@@ -655,8 +597,6 @@ With this setup, MyCap can receive structured data from any website hosted on th
     }
 
     /**************** Submit Results ****************/
-    // When finished, send the results as JSON via the JavaScript channel
-    // (if available) and then close the window.
     function submitResults() {
       const jsonResult = JSON.stringify(result);
       if (window.returnData && typeof window.returnData.postMessage === "function") {
@@ -665,14 +605,12 @@ With this setup, MyCap can receive structured data from any website hosted on th
       } else {
         console.log("JSON Result:", jsonResult);
       }
-      // Optionally close the window after a short delay.
       setTimeout(function() {
         window.close();
       }, 500);
     }
 
     /**************** Initialization ****************/
-    // Initialize pages and render the first page.
     initPages();
     renderPage(currentPageIndex);
   </script>
