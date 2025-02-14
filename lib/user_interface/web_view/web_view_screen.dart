@@ -1,8 +1,10 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+
 import 'package:webview_test/user_interface/web_view/widgets/docs_widget.dart';
 import 'package:webview_test/user_interface/web_view/widgets/refresh_widget.dart';
 import 'package:webview_test/utiltiies/constant/string_constant.dart';
@@ -20,16 +22,73 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool setToInt = true;
   int setTo = 1;
 
+  /// Whether the device is currently offline or not. It starts as `null`
+  /// to indicate we haven't checked connectivity yet.
+  bool? _isOffline;
+
+  /// HTML string to use if offline
+  String? _offlineHtml;
+
   @override
   void initState() {
     super.initState();
+    // Request permissions
     Permission.camera.request();
     Permission.microphone.request();
     Permission.location.request();
+
+    _checkConnectivity();
+  }
+
+  /// Checks whether there is an internet connection. If not, prepare offline HTML.
+  Future<void> _checkConnectivity() async {
+    final connectivityResult = await Connectivity().checkConnectivity();
+    final bool noInternet = (connectivityResult.first == ConnectivityResult.none);
+    print("The connectivity result is: $connectivityResult");
+
+    print('No Internet: $noInternet');
+    if (noInternet) {
+      // Device is offline, build the offline HTML (with local image reference)
+      await _buildOfflineHtml();
+      setState(() {
+        _isOffline = true;
+      });
+    } else {
+      // Device is online
+      setState(() {
+        _isOffline = false;
+      });
+    }
+  }
+
+  /// Build offline HTML string referencing a local image in the documents directory.
+  Future<void> _buildOfflineHtml() async {
+    // 1. Get the documents directory path.
+    final directory = await getApplicationDocumentsDirectory();
+
+    // 2. Construct the file:// URL for your image (right_hand_tap.png).
+    final String imagePath = 'file://${directory.path}/right_hand_tap.png';
+
+    // 3. Build a simple HTML referencing the local image.
+    _offlineHtml = '''
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8"/>
+        <title>Offline Page</title>
+      </head>
+      <body style="text-align:center;">
+        <h2>You are offline!</h2>
+        <p>This is an offline page with a local image.</p>
+        <img src="$imagePath" alt="Instruction Image" style="max-width: 80%; height: auto;"/>
+      </body>
+    </html>
+    ''';
   }
 
   void createWebView(InAppWebViewController controller) {
     _webViewController = controller;
+
     // Handler that will be called from JS: window.flutter_inappwebview.callHandler('returnData', data)
     _webViewController?.addJavaScriptHandler(
       handlerName: 'returnData',
@@ -58,6 +117,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
         receivedData != null ? jsonDecode(receivedData!) : null;
     final String displayString = getDisplayString(dataAsJson);
 
+    // If we haven't checked connectivity yet, show a loader or empty Container.
+    if (_isOffline == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         leading: _buildBackWidget(),
@@ -74,26 +140,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
       body: SafeArea(
         child: receivedData == null
             ? InAppWebView(
-                // I think this one is use url and have blob as backup
-                initialData: InAppWebViewInitialData(
-                  data: StringConstant.html,
-                  baseUrl: WebUri(
-                    StringConstant.mainUrl +
-                        (setToInt ? '?length_of_test=$setTo' : ''),
-                  ),
-                ),
-                // this is just url
-                // initialUrlRequest: URLRequest(
-                //   url: WebUri(
-                //     "${StringConstant.mainUrl}${setToInt ? "?length_of_test=$setTo" : ""}",
-                //   ),
-                // ),
+                initialData: _getInitialData(),
                 initialSettings: InAppWebViewSettings(
                   mediaPlaybackRequiresUserGesture: false,
                   allowsInlineMediaPlayback: true,
+                  cacheEnabled: true,
                 ),
                 onWebViewCreated: (controller) => createWebView(controller),
                 onLoadStop: (controller, url) async {
+                  // Insert your custom JS override here
                   await controller.evaluateJavascript(
                     source: '''
                     // Only if window.returnData doesn’t already have our override:
@@ -107,7 +162,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         }
                       };
                     }
-                  ''',
+                    ''',
                   );
                 },
                 onPermissionRequest: (controller, request) async {
@@ -138,7 +193,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       if (dataAsJson!['image'] != null)
                         AspectRatio(
                           aspectRatio: 9 / 16,
-                          // the json[image] is a base64 string
+                          // The json['image'] is a base64 string
                           child: Image.memory(
                             base64Decode(dataAsJson['image'].split(',')[1]),
                             fit: BoxFit.cover,
@@ -151,6 +206,26 @@ class _WebViewScreenState extends State<WebViewScreen> {
               ),
       ),
     );
+  }
+
+  /// Determine the initial data to load in the InAppWebView
+  /// based on whether we are offline or online.
+  InAppWebViewInitialData _getInitialData() {
+    if (_isOffline == true && _offlineHtml != null) {
+      // Offline scenario
+      return InAppWebViewInitialData(
+        data: _offlineHtml!,
+        baseUrl: WebUri(''), // or you could use: WebUri('file:///')
+      );
+    } else {
+      // Online scenario
+      return InAppWebViewInitialData(
+        data: StringConstant.html,
+        baseUrl: WebUri(
+          StringConstant.mainUrl + (setToInt ? '?length_of_test=$setTo' : ''),
+        ),
+      );
+    }
   }
 
   Widget? _buildBackWidget() {
