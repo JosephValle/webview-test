@@ -112,8 +112,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
   Widget build(BuildContext context) {
     if (receivedData != null) {
       Map<String, dynamic>? jsonData;
+      String? imageData;
       try {
         jsonData = jsonDecode(receivedData!);
+        imageData = jsonData!['image'].split(',').last;
+        jsonData['image'] = 'Image data received';
       } catch (e) {
         jsonData = {'error': 'Invalid JSON received'};
       }
@@ -145,9 +148,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
         body: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
-            child: Text(
-              jsonData.toString(),
-              style: const TextStyle(fontSize: 16),
+            child: Column(
+              children: [
+                if (imageData != null)
+                  Image.memory(
+                    base64Decode(imageData),
+                    width: 200,
+                    height: 200,
+                  ),
+                Text(
+                  jsonData.toString(),
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ],
             ),
           ),
         ),

@@ -1,7 +1,5 @@
 class StringConstant {
-  static const String mainUrl = 'https://super-frangipane-224a80.netlify.app/';
   static const String docs = '''
-
 # How to Create a Custom Active Task for MyCap Data
 
 Creating a custom Application for MyCap allows you to develop your own Active Tasks and send structured JSON data back to the MyCap app via JavaScript via an In-App WebView. This guide will walk you through how to set up your active to properly communicate with the app, ensuring seamless integration into your RedCap Database.

@@ -1,21 +1,20 @@
-
 # How to Create a Custom Active Task for MyCap Data
 
-Creating a custom Application for MyCap allows you to develop your own Active Tasks and send structured JSON data back to the MyCap app via JavaScript via an In-App WebView. This guide will walk you through how to set up your website to properly communicate with the app, ensuring seamless integration into your RedCap Database.
+Creating a custom Application for MyCap allows you to develop your own Active Tasks and send structured JSON data back to the MyCap app via JavaScript via an In-App WebView. This guide will walk you through how to set up your active to properly communicate with the app, ensuring seamless integration into your RedCap Database.
 
 ## 1. Understanding How the WebView Receives Data
 
-The MyCap app displays your active task using a WebView, and it listens for JavaScript messages sent via a JavaScript Channel named "returnData". Your website needs to include JavaScript logic to send data using window.returnData.postMessage(...).
+The MyCap app displays your active task using a WebView, and it listens for JavaScript messages sent via a JavaScript Channel named "returnData". Your website needs to include JavaScript logic to send data using window.returnData.postMessage(...), but may be written in any compatible language.
 
 Your website must:
 
-    Be publicly accessible on the web.
-    Have JavaScript enabled.
-    Format responses as JSON strings.
+- Have no network calls, including loading a bootstrap CSS/JS framework, you must add that in your zip file.
+- Include JavaScript logic to send data using window.returnData.postMessage(...).
+- Send data as JSON strings.
 
 ## 2. Setting Up Your Website to Send JSON Data
 
-You can use any backend language (Node.js, Python, PHP, etc.) to generate and serve data. However, the key part is your frontend JavaScript that communicates with the WebView.
+You can use any language to generate and serve data. However, the key part is your frontend JavaScript that communicates with the WebView.
 Example Web Page (HTML + JavaScript)
 
 This simple page allows users to enter data, which is then sent to the MyCap WebView.
@@ -74,37 +73,50 @@ The JSON is sent to the MyCap app using:
 
     window.returnData.postMessage(result);
 
-## 3. How to Host Your Website
+### 2.1. Sending files: Images, Audio, etc.
 
-As of now, your webpage must be hosted online for the Flutter WebView to access it. Here are a few hosting options:
+We accept files as a base 64 encoded string. Here's an example of how to send an image:
 
-Hosting Service	Notes
-- Netlify: Free tier available, simple to use
-- Vercel: Great for JavaScript-based sites
-- GitHub Pages: Works well for static sites
-- Firebase Hosting: Google-backed hosting
-- Custom Server: Use Nginx/Apache to serve
+```
+function captureImage() {
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+      // Set canvas dimensions equal to video dimensions
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Convert the canvas image to a data URL (base64)
+      canvas.toBlob(function(blob) {
+        const reader = new FileReader();
+        reader.onloadend = function() {
+          result.image = reader.result; // This is a base64 string representing the image bytes.
+          // Stop the video stream
+          if (videoStream) {
+            videoStream.getTracks().forEach(track => track.stop());
+          }
+          // Proceed to next page
+          nextPage();
+        }
+        reader.readAsDataURL(blob);
+      }, 'image/png');
+    }
+```
 
-Once hosted, your page will have a URL like:
-
-https://your-site.com/webview-page.html
-
-This URL can be added on the project on RedCap, along with any custom parameters you may need.
-
-## 4. Summary
+## 3. Summary
 
 ✅ Your website must:
 
-- Host a web page with JavaScript that sends JSON data to window.returnData.postMessage(...).
-- Be publicly accessible
-- Optionally, have a backend API to generate data dynamically.
+- Have no network calls, including loading a bootstrap CSS/JS framework, you must add that in your zip file.
+- Include JavaScript logic to send data using window.returnData.postMessage(...).
+- Send data as JSON strings.
 
 With this setup, MyCap can receive structured data from any website hosted on the web, regardless of the backend technology used.
 
 🚀 Now you can integrate any custom Active Task For MyCap!
 
 ## FAQ
-- Can I utilize device mechanisms such as sensors or health data?
-    - No, due to security limitations, you can only use services allowed within websites, such as location or camera.
+- How do I get my Active Task on the MyCap app?
+  - You can submit your Active Task to the MyCap team for review. Once approved, it will be available for all users to add to their projects.
 - Can the tasks be completed while offline?
-    - As of now, the WebView requires either an internet connection, or we can store one singular HTML file offline. This would mean no assets, and all script tags in the file.
+  - Yes, part of our review process is ensuring that your task is completely offline. However, the initial download of the task requires an internet connection.
