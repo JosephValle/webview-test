@@ -1,11 +1,13 @@
 import 'dart:convert';
-
+import 'dart:io';
+import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:webview_test/user_interface/web_view/widgets/docs_widget.dart';
-import 'package:webview_test/user_interface/web_view/widgets/refresh_widget.dart';
-import 'package:webview_test/utiltiies/constant/string_constant.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:webview_test/network_interface/api_client.dart';
+import 'package:webview_test/user_interface/docs/docs_screen.dart';
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -16,9 +18,9 @@ class WebViewScreen extends StatefulWidget {
 
 class _WebViewScreenState extends State<WebViewScreen> {
   InAppWebViewController? _webViewController;
+  bool _isLoading = true;
+  String? _indexFilePath;
   String? receivedData;
-  bool setToInt = true;
-  int setTo = 1;
 
   @override
   void initState() {
@@ -26,15 +28,79 @@ class _WebViewScreenState extends State<WebViewScreen> {
     Permission.camera.request();
     Permission.microphone.request();
     Permission.location.request();
+    _prepareLocalFiles();
   }
 
-  void createWebView(InAppWebViewController controller) {
-    _webViewController = controller;
-    // Handler that will be called from JS: window.flutter_inappwebview.callHandler('returnData', data)
+  Future<String?> _findIndexHtml(String directoryPath) async {
+    final dir = Directory(directoryPath);
+    await for (final entity in dir.list(recursive: true, followLinks: false)) {
+      if (entity is File &&
+          entity.path.endsWith('index.html') &&
+          !entity.path.contains('__MACOSX')) {
+        return entity.path;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _prepareLocalFiles() async {
+    final documentsDir = await getApplicationDocumentsDirectory();
+    final extractionDirPath = '${documentsDir.path}/website_test';
+
+    if (await Directory(extractionDirPath).exists()) {
+      final foundIndex = await _findIndexHtml(extractionDirPath);
+      if (foundIndex != null) {
+        debugPrint('Using existing extracted website.');
+        _indexFilePath = foundIndex;
+        setState(() => _isLoading = false);
+        return;
+      }
+    }
+
+    // Ensure the extraction directory exists.
+    final extractionDir = Directory(extractionDirPath);
+    if (!await extractionDir.exists()) {
+      await extractionDir.create(recursive: true);
+    }
+
+    // Load the ZIP file from assets.
+    final ByteData data = await ApiClient().downloadZipFile();
+    final List<int> bytes = data.buffer.asUint8List();
+
+    // Decode the archive.
+    final archive = ZipDecoder().decodeBytes(bytes);
+
+    // Extract files and directories.
+    for (final file in archive) {
+      final filename = file.name;
+      final filePath = '$extractionDirPath/$filename';
+      if (file.isFile) {
+        final data = file.content as List<int>;
+        final outFile = File(filePath);
+        await outFile.create(recursive: true);
+        await outFile.writeAsBytes(data);
+        debugPrint('Extracting $filename to $filePath');
+      } else {
+        final dir = Directory(filePath);
+        await dir.create(recursive: true);
+        debugPrint('Extracting $filename to $filePath');
+      }
+    }
+
+    // Locate index.html after extraction.
+    final foundIndex = await _findIndexHtml(extractionDirPath);
+    if (foundIndex != null) {
+      _indexFilePath = foundIndex;
+    } else {
+      throw Exception('index.html not found in the extracted ZIP');
+    }
+    setState(() => _isLoading = false);
+  }
+
+  void _setupJavaScriptHandler() {
     _webViewController?.addJavaScriptHandler(
       handlerName: 'returnData',
       callback: (data) {
-        // data will be the string passed to postMessage
         setState(() {
           receivedData = data.first.toString();
         });
@@ -42,72 +108,90 @@ class _WebViewScreenState extends State<WebViewScreen> {
     );
   }
 
-  String getDisplayString(Map<String, dynamic>? dataAsJson) {
-    String displayString = 'The data fields received are:';
-    if (dataAsJson != null) {
-      dataAsJson.forEach((key, value) {
-        displayString += '\n$key: ${value.toString().length}';
-      });
-    }
-    return displayString;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final Map<String, dynamic>? dataAsJson =
-        receivedData != null ? jsonDecode(receivedData!) : null;
-    final String displayString = getDisplayString(dataAsJson);
+    if (receivedData != null) {
+      Map<String, dynamic>? jsonData;
+      try {
+        jsonData = jsonDecode(receivedData!);
+      } catch (e) {
+        jsonData = {'error': 'Invalid JSON received'};
+      }
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Data Received'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              // Reset the received data and reload the webview.
+              setState(() {
+                receivedData = null;
+              });
+              _webViewController?.reload();
+            },
+          ),
+          actions: [
+            IconButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const DocsScreen()),
+                );
+              },
+              icon: const Icon(Icons.find_in_page_rounded),
+            ),
+          ],
+        ),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              jsonData.toString(),
+              style: const TextStyle(fontSize: 16),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
-      appBar: AppBar(
-        leading: _buildBackWidget(),
-        title: Text(
-          _webViewController != null && receivedData == null
-              ? 'In WebView'
-              : 'WebView Example',
-        ),
-        actions: [
-          if (_webViewController != null) RefreshWidget(_webViewController),
-          if (_webViewController == null) const DocsWidget(),
-        ],
-      ),
-      body: SafeArea(
-        child: receivedData == null
-            ? InAppWebView(
-                // I think this one is use url and have blob as backup
-                initialData: InAppWebViewInitialData(
-                  data: StringConstant.html,
-                  baseUrl: WebUri(
-                    StringConstant.mainUrl +
-                        (setToInt ? '?length_of_test=$setTo' : ''),
-                  ),
+      appBar: AppBar(title: const Text('Local Website from ZIP')),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              child: InAppWebView(
+                // Load the extracted local index.html.
+                initialUrlRequest: URLRequest(
+                  url: WebUri('file://$_indexFilePath'),
                 ),
-                // this is just url
-                // initialUrlRequest: URLRequest(
-                //   url: WebUri(
-                //     "${StringConstant.mainUrl}${setToInt ? "?length_of_test=$setTo" : ""}",
-                //   ),
-                // ),
                 initialSettings: InAppWebViewSettings(
+                  javaScriptEnabled: true,
+                  allowFileAccessFromFileURLs: true,
+                  allowUniversalAccessFromFileURLs: true,
+                  // Allow the webview to access the folder containing index.html.
+                  allowingReadAccessTo: WebUri(
+                    'file://${_indexFilePath!.substring(0, _indexFilePath!.lastIndexOf('/'))}/',
+                  ),
                   mediaPlaybackRequiresUserGesture: false,
                   allowsInlineMediaPlayback: true,
                 ),
-                onWebViewCreated: (controller) => createWebView(controller),
+                onWebViewCreated: (controller) {
+                  _webViewController = controller;
+                  _setupJavaScriptHandler();
+                },
                 onLoadStop: (controller, url) async {
+                  // Override window.returnData in JavaScript to forward data to Flutter.
                   await controller.evaluateJavascript(
                     source: '''
-                    // Only if window.returnData doesn’t already have our override:
-                    if (!window.returnDataOverridden) {
-                      window.returnDataOverridden = true;
-                      const originalReturnData = window.returnData;
-                      window.returnData = {
-                        postMessage: function(data) {
-                          // Forward to Flutter
-                          window.flutter_inappwebview.callHandler("returnData", data);
-                        }
-                      };
-                    }
-                  ''',
+                      if (!window.returnDataOverridden) {
+                        window.returnDataOverridden = true;
+                        window.returnData = {
+                          postMessage: function(data) {
+                            window.flutter_inappwebview.callHandler("returnData", data);
+                          }
+                        };
+                      }
+                    ''',
                   );
                 },
                 onPermissionRequest: (controller, request) async {
@@ -117,54 +201,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   );
                 },
                 onConsoleMessage: (controller, consoleMessage) {
-                  debugPrint(consoleMessage.message);
+                  debugPrint('Console Message: ${consoleMessage.message}');
                 },
-                onReceivedServerTrustAuthRequest:
-                    (controller, challenge) async {
+                onReceivedServerTrustAuthRequest: (
+                  controller,
+                  challenge,
+                ) async {
                   return ServerTrustAuthResponse(
                     action: ServerTrustAuthResponseAction.PROCEED,
                   );
                 },
-              )
-            : SingleChildScrollView(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        displayString,
-                        style: const TextStyle(fontSize: 18),
-                      ),
-                      if (dataAsJson!['image'] != null)
-                        AspectRatio(
-                          aspectRatio: 9 / 16,
-                          // the json[image] is a base64 string
-                          child: Image.memory(
-                            base64Decode(dataAsJson['image'].split(',')[1]),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-                ),
               ),
-      ),
+            ),
     );
-  }
-
-  Widget? _buildBackWidget() {
-    if (_webViewController != null) {
-      return IconButton(
-        onPressed: () {
-          setState(() {
-            _webViewController = null;
-            receivedData = null;
-          });
-        },
-        icon: const Icon(Icons.arrow_back),
-      );
-    }
-    return null;
   }
 }
