@@ -162,34 +162,33 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Local Website from ZIP')),
-      body:
-      _isLoading
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
-        child: InAppWebView(
-          // Load the extracted local index.html.
-          initialUrlRequest: URLRequest(
-            url: WebUri('file://$_indexFilePath'),
-          ),
-          initialSettings: InAppWebViewSettings(
-            javaScriptEnabled: true,
-            allowFileAccessFromFileURLs: true,
-            allowUniversalAccessFromFileURLs: true,
-            // Allow the webview to access the folder containing index.html.
-            allowingReadAccessTo: WebUri(
-              'file://${_indexFilePath!.substring(0, _indexFilePath!.lastIndexOf('/'))}/',
-            ),
-            mediaPlaybackRequiresUserGesture: false,
-            allowsInlineMediaPlayback: true,
-          ),
-          onWebViewCreated: (controller) {
-            _webViewController = controller;
-            _setupJavaScriptHandler();
-          },
-          onLoadStop: (controller, url) async {
-            // Override window.returnData in JavaScript to forward data to Flutter.
-            await controller.evaluateJavascript(
-              source: '''
+              child: InAppWebView(
+                // Load the extracted local index.html.
+                initialUrlRequest: URLRequest(
+                  url: WebUri('file://$_indexFilePath'),
+                ),
+                initialSettings: InAppWebViewSettings(
+                  javaScriptEnabled: true,
+                  allowFileAccessFromFileURLs: true,
+                  allowUniversalAccessFromFileURLs: true,
+                  // Allow the webview to access the folder containing index.html.
+                  allowingReadAccessTo: WebUri(
+                    'file://${_indexFilePath!.substring(0, _indexFilePath!.lastIndexOf('/'))}/',
+                  ),
+                  mediaPlaybackRequiresUserGesture: false,
+                  allowsInlineMediaPlayback: true,
+                ),
+                onWebViewCreated: (controller) {
+                  _webViewController = controller;
+                  _setupJavaScriptHandler();
+                },
+                onLoadStop: (controller, url) async {
+                  // Override window.returnData in JavaScript to forward data to Flutter.
+                  await controller.evaluateJavascript(
+                    source: '''
                       if (!window.returnDataOverridden) {
                         window.returnDataOverridden = true;
                         window.returnData = {
@@ -199,27 +198,27 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         };
                       }
                     ''',
-            );
-          },
-          onPermissionRequest: (controller, request) async {
-            return PermissionResponse(
-              resources: request.resources,
-              action: PermissionResponseAction.GRANT,
-            );
-          },
-          onConsoleMessage: (controller, consoleMessage) {
-            debugPrint('Console Message: ${consoleMessage.message}');
-          },
-          onReceivedServerTrustAuthRequest: (
-              controller,
-              challenge,
-              ) async {
-            return ServerTrustAuthResponse(
-              action: ServerTrustAuthResponseAction.PROCEED,
-            );
-          },
-        ),
-      ),
+                  );
+                },
+                onPermissionRequest: (controller, request) async {
+                  return PermissionResponse(
+                    resources: request.resources,
+                    action: PermissionResponseAction.GRANT,
+                  );
+                },
+                onConsoleMessage: (controller, consoleMessage) {
+                  debugPrint('Console Message: ${consoleMessage.message}');
+                },
+                onReceivedServerTrustAuthRequest: (
+                  controller,
+                  challenge,
+                ) async {
+                  return ServerTrustAuthResponse(
+                    action: ServerTrustAuthResponseAction.PROCEED,
+                  );
+                },
+              ),
+            ),
     );
   }
 }

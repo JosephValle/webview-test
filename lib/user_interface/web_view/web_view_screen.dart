@@ -55,7 +55,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   @override
   Widget build(BuildContext context) {
     final Map<String, dynamic>? dataAsJson =
-    receivedData != null ? jsonDecode(receivedData!) : null;
+        receivedData != null ? jsonDecode(receivedData!) : null;
     final String displayString = getDisplayString(dataAsJson);
 
     return Scaffold(
@@ -74,28 +74,28 @@ class _WebViewScreenState extends State<WebViewScreen> {
       body: SafeArea(
         child: receivedData == null
             ? InAppWebView(
-          // I think this one is use url and have blob as backup
-          initialData: InAppWebViewInitialData(
-            data: StringConstant.html,
-            baseUrl: WebUri(
-              StringConstant.mainUrl +
-                  (setToInt ? '?length_of_test=$setTo' : ''),
-            ),
-          ),
-          // this is just url
-          // initialUrlRequest: URLRequest(
-          //   url: WebUri(
-          //     "${StringConstant.mainUrl}${setToInt ? "?length_of_test=$setTo" : ""}",
-          //   ),
-          // ),
-          initialSettings: InAppWebViewSettings(
-            mediaPlaybackRequiresUserGesture: false,
-            allowsInlineMediaPlayback: true,
-          ),
-          onWebViewCreated: (controller) => createWebView(controller),
-          onLoadStop: (controller, url) async {
-            await controller.evaluateJavascript(
-              source: '''
+                // I think this one is use url and have blob as backup
+                initialData: InAppWebViewInitialData(
+                  data: StringConstant.html,
+                  baseUrl: WebUri(
+                    StringConstant.mainUrl +
+                        (setToInt ? '?length_of_test=$setTo' : ''),
+                  ),
+                ),
+                // this is just url
+                // initialUrlRequest: URLRequest(
+                //   url: WebUri(
+                //     "${StringConstant.mainUrl}${setToInt ? "?length_of_test=$setTo" : ""}",
+                //   ),
+                // ),
+                initialSettings: InAppWebViewSettings(
+                  mediaPlaybackRequiresUserGesture: false,
+                  allowsInlineMediaPlayback: true,
+                ),
+                onWebViewCreated: (controller) => createWebView(controller),
+                onLoadStop: (controller, url) async {
+                  await controller.evaluateJavascript(
+                    source: '''
                     // Only if window.returnData doesn’t already have our override:
                     if (!window.returnDataOverridden) {
                       window.returnDataOverridden = true;
@@ -108,47 +108,47 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       };
                     }
                   ''',
-            );
-          },
-          onPermissionRequest: (controller, request) async {
-            return PermissionResponse(
-              resources: request.resources,
-              action: PermissionResponseAction.GRANT,
-            );
-          },
-          onConsoleMessage: (controller, consoleMessage) {
-            debugPrint(consoleMessage.message);
-          },
-          onReceivedServerTrustAuthRequest:
-              (controller, challenge) async {
-            return ServerTrustAuthResponse(
-              action: ServerTrustAuthResponseAction.PROCEED,
-            );
-          },
-        )
+                  );
+                },
+                onPermissionRequest: (controller, request) async {
+                  return PermissionResponse(
+                    resources: request.resources,
+                    action: PermissionResponseAction.GRANT,
+                  );
+                },
+                onConsoleMessage: (controller, consoleMessage) {
+                  debugPrint(consoleMessage.message);
+                },
+                onReceivedServerTrustAuthRequest:
+                    (controller, challenge) async {
+                  return ServerTrustAuthResponse(
+                    action: ServerTrustAuthResponseAction.PROCEED,
+                  );
+                },
+              )
             : SingleChildScrollView(
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  displayString,
-                  style: const TextStyle(fontSize: 18),
-                ),
-                if (dataAsJson!['image'] != null)
-                  AspectRatio(
-                    aspectRatio: 9 / 16,
-                    // the json[image] is a base64 string
-                    child: Image.memory(
-                      base64Decode(dataAsJson['image'].split(',')[1]),
-                      fit: BoxFit.cover,
-                    ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        displayString,
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                      if (dataAsJson!['image'] != null)
+                        AspectRatio(
+                          aspectRatio: 9 / 16,
+                          // the json[image] is a base64 string
+                          child: Image.memory(
+                            base64Decode(dataAsJson['image'].split(',')[1]),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                    ],
                   ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-        ),
+                ),
+              ),
       ),
     );
   }
