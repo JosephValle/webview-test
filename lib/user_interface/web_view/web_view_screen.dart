@@ -7,6 +7,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:webview_test/network_interface/api_client.dart';
+import 'package:webview_test/user_interface/chart/chart_screen.dart';
 import 'package:webview_test/user_interface/docs/docs_screen.dart';
 
 class WebViewScreen extends StatefulWidget {
@@ -168,7 +169,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Local Website from ZIP')),
+      appBar: AppBar(
+        title: const Text('Local Website from ZIP'),
+        actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ChartScreen()),
+              );
+            },
+            icon: const Icon(Icons.bar_chart_rounded),
+          ),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
