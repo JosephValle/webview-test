@@ -134,8 +134,13 @@ class _ChartScreenState extends State<ChartScreen> {
               },
             ),
           ),
-          leftTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: true, reservedSize: 40),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              maxIncluded: false,
+              minIncluded: minX == 0,
+              showTitles: true,
+              reservedSize: 40,
+            ),
           ),
         ),
         borderData: FlBorderData(show: true),
