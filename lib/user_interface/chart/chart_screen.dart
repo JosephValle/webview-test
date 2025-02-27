@@ -178,8 +178,9 @@ class _ChartScreenState extends State<ChartScreen> {
   }
 
   Widget _buildBarChart() {
-    // 1) Aggregate data by hour of day
-    //    We'll just ignore the date portion and group by hour.
+    // 1) Aggregate data by hour of day (ignoring date portion).
+    //    We just count how many submissions occur in each hour
+    //    AND we'll also keep the actual values so we can compute the average.
     final Map<int, List<int>> hourToValues = {};
     for (int i = 0; i < _dates.length; i++) {
       final hour = _dates[i].hour;
@@ -187,49 +188,88 @@ class _ChartScreenState extends State<ChartScreen> {
       hourToValues[hour]!.add(_values[i]);
     }
 
-    // 2) Create BarChartGroupData for each hour in 0..23
+    // 2) Flatten all hour values to find global min/max
+    //    (Used to color bars based on avg.)
+    final allValues = hourToValues.values.expand((list) => list).toList();
+    final int globalMin = allValues.isEmpty ? 0 : allValues.reduce(min);
+    final int globalMax = allValues.isEmpty ? 0 : allValues.reduce(max);
+
+    // Helper to map an hour's average → Color, from Red (min) → Yellow (mid) → Green (max)
+    Color getBarColorFromAverage({
+      required double avg,
+      required int globalMin,
+      required int globalMax,
+    }) {
+      // If all values are the same, default to yellow (or handle as desired).
+      if (globalMin == globalMax) {
+        return Colors.amber;
+      }
+
+      // Convert avg to fraction in [0..1].
+      double fraction = (avg - globalMin) / (globalMax - globalMin);
+      fraction = fraction.clamp(0.0, 1.0);
+
+      // Red → Yellow for first half, Yellow → Green for second half
+      if (fraction < 0.5) {
+        return Color.lerp(Colors.red, Colors.amber, fraction * 2)!;
+      } else {
+        return Color.lerp(Colors.amber, Colors.green, (fraction - 0.5) * 2)!;
+      }
+    }
+
+    // 3) Create BarChartGroupData for each hour in 0..23
     final barGroups = <BarChartGroupData>[];
     for (int hour = 0; hour < 24; hour++) {
       final values = hourToValues[hour] ?? [];
-      final count = values.length;
-      final double yValue =
-          count.toDouble(); // y-axis is the count of submissions
+      final count = values.length;       // how many submissions this hour
+      final double toY = count.toDouble();
+
+      // Compute the average of the hour’s values
+      double avg = 0;
+      if (values.isNotEmpty) {
+        avg = values.reduce((a, b) => a + b) / values.length;
+      }
+
+      // Determine the color for this bar, based on the hour's average
+      final rodColor = getBarColorFromAverage(
+        avg: avg,
+        globalMin: globalMin,
+        globalMax: globalMax,
+      );
+
       barGroups.add(
         BarChartGroupData(
           x: hour,
           barRods: [
             BarChartRodData(
-              toY: yValue,
-              // if index is odd show an opacity .9
-              color: hour.isEven
-                  ? Colors.green.withValues(alpha: .75)
-                  : Colors.blue.withValues(alpha: .75),
-
+              toY: toY,
+              color: rodColor,
               width: 16,
+              borderSide:  BorderSide(
+                color: Colors.black.withValues(alpha: 0.5),
+                width: 1,
+              ),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(6),
                 topRight: Radius.circular(6),
               ),
+              // thin gray outline for border
             ),
           ],
         ),
       );
     }
 
-    // 3) We'll need a helper to convert a 24-hour integer to a "1-2 pm" style label
+    // Helper to convert an hour (0..23) into a label like "11am - 12pm"
     String hourRangeLabel(int hour) {
-      // The "next hour" in 24-hour format:
       final int nextHour = (hour + 1) % 24;
 
-      // Convert "hour" to 12-hour format (treat 0 as 12)
       final startHour12 = (hour % 12 == 0) ? 12 : (hour % 12);
       final startAmPm = (hour < 12) ? 'am' : 'pm';
 
-      // Convert "nextHour" to 12-hour format (treat 0 as 12)
       final endHour12 = (nextHour % 12 == 0) ? 12 : (nextHour % 12);
       final endAmPm = (nextHour < 12) ? 'am' : 'pm';
 
-      // Build a string like "11 am - 12 pm" or "11 pm - 12 am"
       return '$startHour12$startAmPm - $endHour12$endAmPm';
     }
 
@@ -245,18 +285,19 @@ class _ChartScreenState extends State<ChartScreen> {
               if (values.isEmpty) {
                 // No submissions
                 return BarTooltipItem(
-                  '${hourRangeLabel(hour)}\n0 Submission${values.length == 1 ? '' : 's'}',
+                  '${hourRangeLabel(hour)}\n0 Submission',
                   const TextStyle(color: Colors.white),
                 );
-              } // if there is only one, just display the value
-              else if (values.length == 1) {
+              } else if (values.length == 1) {
+                // Only one submission
                 return BarTooltipItem(
                   '${hourRangeLabel(hour)}\n'
-                  '1 Submission\n'
-                  'Value: ${values.first}',
+                      '1 Submission\n'
+                      'Value: ${values.first}',
                   const TextStyle(color: Colors.white),
                 );
               } else {
+                // Multiple submissions
                 final count = values.length;
                 final avg = values.reduce((a, b) => a + b) / values.length;
                 final high = values.reduce(max);
@@ -264,10 +305,10 @@ class _ChartScreenState extends State<ChartScreen> {
 
                 return BarTooltipItem(
                   '${hourRangeLabel(hour)}\n'
-                  '$count Submissions\n'
-                  'Average: ${avg.toStringAsFixed(1)}\n'
-                  'High: $high\n'
-                  'Low: $low',
+                      '$count Submissions\n'
+                      'Average: ${avg.toStringAsFixed(1)}\n'
+                      'High: $high\n'
+                      'Low: $low',
                   const TextStyle(color: Colors.white),
                 );
               }
@@ -287,17 +328,18 @@ class _ChartScreenState extends State<ChartScreen> {
               maxIncluded: false,
               showTitles: true,
               reservedSize: 40,
+              // Use the highest count to choose an interval or just leave it default
               interval: hourToValues.values
                   .map((list) => list.length)
                   .fold(0, max)
-                  .roundToDouble(),
+                  .toDouble(),
             ),
           ),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 40,
-              // step every 6 hours so you hit hours 0, 6, 12, 18, 24
+              // step every 6 hours so you hit 0, 6, 12, 18
               interval: 6,
               getTitlesWidget: (value, meta) {
                 final hour = value.toInt();
@@ -319,6 +361,7 @@ class _ChartScreenState extends State<ChartScreen> {
         gridData: FlGridData(
           show: true,
           getDrawingHorizontalLine: (value) {
+            // Draw a thicker line at y=0
             if (value == 0) {
               return const FlLine(color: Colors.black, strokeWidth: 2);
             }
@@ -336,7 +379,10 @@ class _ChartScreenState extends State<ChartScreen> {
             );
           },
         ),
+        // Our actual bar data
         barGroups: barGroups,
+
+        // minY always 0, maxY is the largest count across all hours * 1.1
         minY: 0,
         maxY: hourToValues.values.map((list) => list.length).fold(0, max) * 1.1,
       ),
@@ -396,4 +442,5 @@ class _ChartScreenState extends State<ChartScreen> {
       ),
     );
   }
+
 }
